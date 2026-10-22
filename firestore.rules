@@ -1,0 +1,99 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net: default-deny all undefined collections
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Hardened Helper Primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['uid', 'email'])
+        && data.keys().hasOnly(['uid', 'email', 'displayName', 'photoURL', 'createdAt'])
+        && data.uid is string && data.uid == request.auth.uid
+        && data.email is string && data.email.size() <= 320
+        && (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 120))
+        && (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 1000))
+        && (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 64));
+    }
+
+    function isValidApiKey(data) {
+      return data.keys().hasAll(['id', 'name', 'maskedKey', 'ownerId', 'role', 'createdAt'])
+        && data.keys().hasOnly(['id', 'name', 'maskedKey', 'ownerId', 'role', 'createdAt', 'lastUsedAt'])
+        && data.id is string && isValidId(data.id)
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 100
+        && data.maskedKey is string && data.maskedKey.size() <= 100
+        && data.ownerId is string && data.ownerId == request.auth.uid
+        && data.role in ['live', 'test']
+        && data.createdAt is string && data.createdAt.size() <= 64
+        && (!('lastUsedAt' in data) || (data.lastUsedAt is string && data.lastUsedAt.size() <= 64));
+    }
+
+    function isValidVerificationRecord(data) {
+      return data.keys().hasAll(['id', 'status', 'bank', 'createdAt', 'ownerId'])
+        && data.keys().hasOnly([
+          'id', 'verificationId', 'status', 'bank', 'transactionReference',
+          'amount', 'currency', 'payerName', 'payerPhoneMasked',
+          'recipientName', 'recipientAccount', 'rawLinkDomain',
+          'riskScore', 'failureReason', 'createdAt', 'ownerId'
+        ])
+        && data.id is string && isValidId(data.id)
+        && data.status is string && data.status.size() <= 50
+        && data.bank is string && data.bank.size() <= 50
+        && data.ownerId is string && data.ownerId == request.auth.uid
+        && data.createdAt is string && data.createdAt.size() <= 64
+        && (!('amount' in data) || (data.amount is number && data.amount >= 0))
+        && (!('riskScore' in data) || (data.riskScore is number && data.riskScore >= 0 && data.riskScore <= 1))
+        && (!('currency' in data) || (data.currency is string && data.currency.size() <= 10))
+        && (!('transactionReference' in data) || (data.transactionReference is string && data.transactionReference.size() <= 100))
+        && (!('payerName' in data) || (data.payerName is string && data.payerName.size() <= 200))
+        && (!('recipientName' in data) || (data.recipientName is string && data.recipientName.size() <= 200))
+        && (!('recipientAccount' in data) || (data.recipientAccount is string && data.recipientAccount.size() <= 100))
+        && (!('rawLinkDomain' in data) || (data.rawLinkDomain is string && data.rawLinkDomain.size() <= 200))
+        && (!('failureReason' in data) || (data.failureReason is string && data.failureReason.size() <= 500));
+    }
+
+    // 1. Users collection: Isolated to the authenticating user
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+      allow list: if false; // Blanket enumeration of user accounts is prohibited
+      allow create, update: if isSignedIn() && isValidId(userId) && request.auth.uid == userId && isValidUserProfile(incoming());
+      allow delete: if false;
+    }
+
+    // 2. User API Keys: Isolated to the key owner
+    match /api_keys/{keyId} {
+      allow get: if isSignedIn() && isValidId(keyId) && existing().ownerId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(keyId) && incoming().ownerId == request.auth.uid && isValidApiKey(incoming());
+      allow delete: if isSignedIn() && isValidId(keyId) && existing().ownerId == request.auth.uid;
+      allow update: if false; // API keys are immutable after generation
+    }
+
+    // 3. Verification Audit Records: Append-only immutable ledger
+    match /verification_records/{recordId} {
+      allow get: if isSignedIn() && isValidId(recordId) && existing().ownerId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(recordId) && incoming().ownerId == request.auth.uid && isValidVerificationRecord(incoming());
+      allow update, delete: if false; // Strictly immutable audit trail
+    }
+  }
+}

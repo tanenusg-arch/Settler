@@ -1,0 +1,8 @@
+{
+  "name": "Settlr.et — Ethiopian Payment Verification & Settlement Gateway",
+  "description": "Instant payment receipt verification and settlement gateway for Commercial Bank of Ethiopia (CBE), Awash Bank, and eBirr.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

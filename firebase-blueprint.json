@@ -1,0 +1,69 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated user profile and role metadata.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Unique Firebase user ID" },
+        "email": { "type": "string", "description": "User email address" },
+        "displayName": { "type": "string", "description": "Display name of user" },
+        "photoURL": { "type": "string", "description": "Profile photo URL" },
+        "createdAt": { "type": "string", "description": "Account creation timestamp" }
+      },
+      "required": ["uid", "email"]
+    },
+    "VerificationRecord": {
+      "title": "VerificationRecord",
+      "description": "Audited payment verification event record.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier" },
+        "verificationId": { "type": "string", "description": "Verification reference UUID" },
+        "status": { "type": "string", "description": "Status enum VERIFIED, SUSPICIOUS_DOMAIN, DUPLICATE_CLAIM, AMOUNT_MISMATCH" },
+        "bank": { "type": "string", "description": "Bank rail identifier" },
+        "transactionReference": { "type": "string", "description": "Official bank FT / transaction reference" },
+        "amount": { "type": "number", "description": "Verified transaction amount in ETB" },
+        "currency": { "type": "string", "description": "Currency code ETB" },
+        "payerName": { "type": "string", "description": "Extracted payer name" },
+        "recipientName": { "type": "string", "description": "Extracted recipient name" },
+        "recipientAccount": { "type": "string", "description": "Extracted account number" },
+        "rawLinkDomain": { "type": "string", "description": "Target hostname domain" },
+        "riskScore": { "type": "number", "description": "Risk score between 0 and 1" },
+        "failureReason": { "type": "string", "description": "Failure or warning description" },
+        "createdAt": { "type": "string", "description": "ISO timestamp of verification" },
+        "ownerId": { "type": "string", "description": "UID of user who verified or 'anonymous'" }
+      },
+      "required": ["id", "status", "bank", "createdAt"]
+    },
+    "UserApiKey": {
+      "title": "UserApiKey",
+      "description": "User generated API key record.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Key ID" },
+        "name": { "type": "string", "description": "Key nickname" },
+        "maskedKey": { "type": "string", "description": "Masked secret key string" },
+        "role": { "type": "string", "description": "Environment live or test" },
+        "createdAt": { "type": "string", "description": "Creation timestamp" },
+        "lastUsedAt": { "type": "string", "description": "Last execution timestamp" },
+        "ownerId": { "type": "string", "description": "User UID who minted the key" }
+      },
+      "required": ["id", "name", "maskedKey", "ownerId", "role", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile collection isolated to the owner."
+    },
+    "/verification_records/{recordId}": {
+      "schema": "VerificationRecord",
+      "description": "Immutable audit ledger of payment verifications."
+    },
+    "/api_keys/{keyId}": {
+      "schema": "UserApiKey",
+      "description": "User secret keys isolated to the key owner."
+    }
+  }
+}
